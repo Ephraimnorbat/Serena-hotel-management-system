@@ -25,8 +25,19 @@ SECRET_KEY = 'on9*bf65je3#4+jphqufropk!s9*i&$*54@_9t8^6+c)iro2&q'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*','localhost', '127.0.0.1', 'your-production-domain.com', '0a2c-102-68-78-199.ngrok-free.app']
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "https://0a2c-102-68-78-199.ngrok-free.app",
+]
+
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://0a2c-102-68-78-199.ngrok-free.app', 
+    'http://localhost',  
+]
 
 # Application definition
 

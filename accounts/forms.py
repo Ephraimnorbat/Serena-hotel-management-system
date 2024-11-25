@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django import forms
 
 from .models import *
+from room.models import *
 
 
 # class CreateUserForm(UserCreationForm):

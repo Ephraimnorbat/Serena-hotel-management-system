@@ -10,8 +10,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import Group, User
 
-import datetime
-from datetime import date
+from datetime import datetime, date, timedelta
+
 
 import random
 # Create your views here.
@@ -21,21 +21,22 @@ from hotel.models import *
 from .forms import *
 
 
-
-@ login_required(login_url='login')
+@login_required(login_url='login')
 def rooms(request):
     role = str(request.user.groups.all()[0])
     path = role + "/"
     rooms = Room.objects.all()
-    firstDayStr = None
-    lastDateStr = None
+    
+    # Get dates from either date filter or room filter form
+    firstDayStr = request.POST.get("fd", "")
+    lastDateStr = request.POST.get("ld", "")
 
-    def chech_availability(fd, ed):
+    def check_availability(fd, ed):
         availableRooms = []
         for room in rooms:
             availList = []
             bookingList = Booking.objects.filter(roomNumber=room)
-            if room.statusStartDate == None:
+            if room.statusStartDate is None:
                 for booking in bookingList:
                     if booking.startDate > ed.date() or booking.endDate < fd.date():
                         availList.append(True)
@@ -52,58 +53,44 @@ def rooms(request):
                             availList.append(False)
                         if all(availList):
                             availableRooms.append(room)
-
         return availableRooms
 
     if request.method == "POST":
-        if "dateFilter" in request.POST:
-            firstDayStr = request.POST.get("fd", "")
-            lastDateStr = request.POST.get("ld", "")
-
-            firstDay = datetime.strptime(firstDayStr, '%Y-%m-%d')
-            lastDate = datetime.strptime(lastDateStr, '%Y-%m-%d')
-
-            rooms = chech_availability(firstDay, lastDate)
+        # Store dates regardless of which form was submitted
+        if firstDayStr and lastDateStr:
+            try:
+                firstDay = datetime.strptime(firstDayStr, '%Y-%m-%d')
+                lastDate = datetime.strptime(lastDateStr, '%Y-%m-%d')
+                rooms = check_availability(firstDay, lastDate)
+            except ValueError:
+                messages.error(request, "Invalid date format")
 
         if "filter" in request.POST:
-            if (request.POST.get("number") != ""):
-                rooms = rooms.filter(
-                    number__contains=request.POST.get("number"))
-
-            if (request.POST.get("capacity") != ""):
-                rooms = rooms.filter(
-                    capacity__gte=request.POST.get("capacity"))
-
-            if (request.POST.get("nob") != ""):
-                rooms = rooms.filter(
-                    numberOfBeds__gte=request.POST.get("nob"))
-
-            if (request.POST.get("type") != ""):
-                rooms = rooms.filter(
-                    roomType__contains=request.POST.get("type"))
-
-            if (request.POST.get("price") != ""):
-                rooms = rooms.filter(
-                    price__lte=request.POST.get("price"))
-
-            context = {
-                "role": role,
-                "rooms": rooms,
-                "number": request.POST.get("number"),
-                "capacity": request.POST.get("capacity"),
-                "nob": request.POST.get("nob"),
-                "price": request.POST.get("price"),
-                "type": request.POST.get("type")
-            }
-            return render(request, path + "rooms.html", context)
+            if request.POST.get("number"):
+                rooms = rooms.filter(number__contains=request.POST.get("number"))
+            if request.POST.get("capacity"):
+                rooms = rooms.filter(capacity__gte=request.POST.get("capacity"))
+            if request.POST.get("nob"):
+                rooms = rooms.filter(numberOfBeds__gte=request.POST.get("nob"))
+            if request.POST.get("type"):
+                rooms = rooms.filter(roomType__contains=request.POST.get("type"))
+            if request.POST.get("price"):
+                rooms = rooms.filter(price__lte=request.POST.get("price"))
 
     context = {
         "role": role,
-        'rooms': rooms,
-        'fd': firstDayStr,
-        'ld': lastDateStr
+        "rooms": rooms,
+        "fd": firstDayStr,
+        "ld": lastDateStr,
+        "number": request.POST.get("number"),
+        "capacity": request.POST.get("capacity"),
+        "nob": request.POST.get("nob"),
+        "price": request.POST.get("price"),
+        "type": request.POST.get("type")
     }
     return render(request, path + "rooms.html", context)
+
+
 
 
 @login_required(login_url='login')
@@ -374,46 +361,45 @@ def bookings(request):
 
 @login_required(login_url='login')
 def booking_make(request):
+    print(f"POST Data: {request.POST}")
+
     role = str(request.user.groups.all()[0]) if request.user.groups.exists() else "guest"
     path = role + "/"
+    names = []
 
     try:
         room_number = request.POST.get("roomid")
         room = Room.objects.get(number=room_number)
         guests = Guest.objects.all()
-        names = []
+        first_date = request.POST.get("fd")
+        last_date = request.POST.get("ld")
+        total = 0
 
-        if request.method == 'POST':
-            first_date = request.POST.get("fd")
-            last_date = request.POST.get("ld")
-            
-            # Validate dates before processing
-            if not first_date or not last_date:
-                messages.error(request, "Please select check-in and check-out dates first")
-                return redirect("rooms")
-
-            start_date = datetime.strptime(first_date, "%Y-%m-%d")
-            end_date = datetime.strptime(last_date, "%Y-%m-%d")
+        if first_date and last_date:
+            start_date = datetime.strptime(first_date, '%Y-%m-%d')
+            end_date = datetime.strptime(last_date, '%Y-%m-%d')
             numberOfDays = abs((end_date-start_date).days)
             total = room.price * numberOfDays
 
-            if 'bookGuestButton' in request.POST:
+            if request.method == 'POST' and 'bookGuestButton' in request.POST:
                 curguest = Guest.objects.get(id=request.POST.get("guest")) if "guest" in request.POST else request.user.guest
-                curbooking = Booking.objects.create(
+                # No need to assign to a variable if not used
+                Booking.objects.create(
                     guest=curguest,
                     roomNumber=room,
-                    startDate=first_date,
-                    endDate=last_date
+                    startDate=start_date,
+                    endDate=end_date
                 )
                 return redirect("payment")
 
+
         context = {
-            "fd": request.POST.get("fd"),
-            "ld": request.POST.get("ld"),
             "role": role,
             "guests": guests,
             "room": room,
-            "total": total if 'total' in locals() else 0,
+            "total": total,
+            "fd": first_date,
+            "ld": last_date,
             "names": names
         }
         return render(request, path + "booking-make.html", context)
@@ -421,8 +407,6 @@ def booking_make(request):
     except Room.DoesNotExist:
         messages.error(request, "Room not found")
         return redirect("rooms")
-
-
 
 
 @login_required(login_url='login')

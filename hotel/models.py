@@ -2,7 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 
-from accounts.models import Guest, Employee
+from accounts.models import Employee
+from room.models import Guest
 
 
 # Create your models here.
@@ -54,13 +55,6 @@ class Bills(models.Model):
         return str(self.guest) + " " + str(self.summary) + " " + str(self.totalAmount)
 
 
-class FoodMenu(models.Model):
-    startDate = models.DateField()
-    endDate = models.DateField()
-    menuItems = models.TextField()
-
-    def __str__(self):
-        return str(self.menuItems) + " " + str(self.startDate)
 
 
 class Report(models.Model):
